@@ -18,7 +18,7 @@ extern crate alloc;
 
 #[macro_use]
 mod macros;
-mod imp;
+pub mod imp;
 
 pub use axerrno::{AxError, AxResult};
 
@@ -402,4 +402,17 @@ pub mod modules {
     pub use axnet;
     #[cfg(feature = "multitask")]
     pub use axtask;
+}
+
+pub mod random {
+    define_api_type!(
+        @cfg "random";
+        pub type u128;
+    );
+
+    define_api!(
+        @cfg "random";
+        /// gets a random number.
+        pub fn get_random_number() -> u128;
+    );
 }
