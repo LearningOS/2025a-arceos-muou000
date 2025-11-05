@@ -27,6 +27,8 @@ const CMD_TABLE: &[(&str, CmdHandler)] = &[
     ("pwd", do_pwd),
     ("rm", do_rm),
     ("uname", do_uname),
+    ("rename", do_rename),
+    ("mv", do_mv),
 ];
 
 fn file_type_to_char(ty: FileType) -> char {
@@ -270,6 +272,21 @@ fn do_help(_args: &str) {
 fn do_exit(_args: &str) {
     println!("Bye~");
     std::process::exit(0);
+}
+
+fn do_rename(args: &str) {
+    let (src, dest) = split_whitespace(args);
+    if src.is_empty() || dest.is_empty() {
+        print_err!("rename", "missing operand");
+        return;
+    }
+    if let Err(e) = fs::rename(src, dest) {
+        print_err!("rename", format_args!("cannot rename '{src}' to '{dest}'"), e);
+    }
+}
+
+fn do_mv(_args: &str) {
+    todo!()
 }
 
 pub fn run_cmd(line: &[u8]) {

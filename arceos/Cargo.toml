@@ -55,6 +55,8 @@ members = [
     "exercises/sys_map",
     "exercises/simple_hv",
     "exercises/ramfs_rename",
+
+    "examples/shell",
 ]
 
 [workspace.package]
@@ -93,7 +95,7 @@ elf = { path = "modules/elf" }
 axfs_ramfs = { path = "./axfs_ramfs" }
 
 [patch.crates-io]
-kernel_guard = { path = "../crates/kernel_guard"} 
+kernel_guard = { path = "../crates/kernel_guard"}
 
 [profile.release]
 lto = true

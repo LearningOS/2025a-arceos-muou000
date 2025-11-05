@@ -1,6 +1,5 @@
 #![no_std]
 
-use core::alloc;
 
 use allocator::{BaseAllocator, ByteAllocator, PageAllocator};
 

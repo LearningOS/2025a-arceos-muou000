@@ -165,6 +165,18 @@ impl VfsNodeOps for DirNode {
         }
     }
 
+    fn rename(&self, src_path: &str, dst_path: &str) -> VfsResult {
+        let (src_name, _src_rest) = split_path(src_path);
+        let (dst_name, _dst_rest) = split_path(dst_path);
+
+        let mut children = self.children.write();
+        let node = children.get(src_name).ok_or(VfsError::NotFound)?.clone();
+
+        children.remove(src_name);
+        children.insert(dst_name.into(), node);
+        Ok(())
+    }
+
     axfs_vfs::impl_vfs_dir_default! {}
 }
 
