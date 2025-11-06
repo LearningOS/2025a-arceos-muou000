@@ -166,14 +166,56 @@ impl VfsNodeOps for DirNode {
     }
 
     fn rename(&self, src_path: &str, dst_path: &str) -> VfsResult {
-        let (src_name, _src_rest) = split_path(src_path);
-        let (dst_name, _dst_rest) = split_path(dst_path);
+        let (src_dir, src_name) = split_path_name(src_path);
+        let (dst_dir, dst_name) = split_path_name(dst_path);
 
-        let mut children = self.children.write();
-        let node = children.get(src_name).ok_or(VfsError::NotFound)?.clone();
+        if src_name.is_empty() || dst_name.is_empty() {
+            return Err(VfsError::InvalidInput);
+        }
 
-        children.remove(src_name);
-        children.insert(dst_name.into(), node);
+        let this = self.this.upgrade().ok_or(VfsError::NotFound)?;
+
+        let src_parent_node: VfsNodeRef = if src_dir.is_empty() {
+            this.clone() as VfsNodeRef
+        } else {
+            Arc::clone(&this).lookup(src_dir)?
+        };
+        let dst_parent_node: VfsNodeRef = if dst_dir.is_empty() {
+            this.clone() as VfsNodeRef
+        } else {
+            this.lookup(dst_dir)?
+        };
+
+        let src_parent = src_parent_node
+            .as_any()
+            .downcast_ref::<DirNode>()
+            .ok_or(VfsError::InvalidInput)?;
+        let dst_parent = dst_parent_node
+            .as_any()
+            .downcast_ref::<DirNode>()
+            .ok_or(VfsError::InvalidInput)?;
+
+        let src_node = src_parent
+            .children
+            .write()
+            .remove(src_name)
+            .ok_or(VfsError::NotFound)?;
+
+        if dst_parent.exist(dst_name) {
+            dst_parent.remove_node(dst_name)?;
+        } else {
+        }
+
+        dst_parent
+            .children
+            .write()
+            .insert(dst_name.into(), src_node.clone());
+
+        if let Some(dir_node) = src_node.as_any().downcast_ref::<DirNode>() {
+            dir_node.set_parent(Some(&dst_parent_node));
+        } else {
+        }
+
         Ok(())
     }
 
@@ -185,4 +227,15 @@ fn split_path(path: &str) -> (&str, Option<&str>) {
     trimmed_path.find('/').map_or((trimmed_path, None), |n| {
         (&trimmed_path[..n], Some(&trimmed_path[n + 1..]))
     })
+}
+
+fn split_path_name(path: &str) -> (&str, &str) {
+    let trimmed = path.trim_start_matches('/').trim_end_matches('/');
+    if trimmed.is_empty() {
+        return ("", "");
+    }
+    match trimmed.rfind('/') {
+        Some(idx) => (&trimmed[..idx], &trimmed[idx + 1..]),
+        None => ("", trimmed),
+    }
 }

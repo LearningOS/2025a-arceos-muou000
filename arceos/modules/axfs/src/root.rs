@@ -304,12 +304,17 @@ pub(crate) fn set_current_dir(path: &str) -> AxResult {
 }
 
 pub(crate) fn rename(old: &str, new: &str) -> AxResult {
-    let node = parent_node_of(None, new).lookup(new)?;
-    let attr = node.get_attr()?;
-    if attr.is_dir() {
-        remove_dir(None, new)?;
-    } else {
-        remove_file(None, new)?;
+    match parent_node_of(None, new).lookup(new) {
+        Ok(node) => {
+            let attr = node.get_attr()?;
+            if attr.is_dir() {
+                remove_dir(None, new)?;
+            } else {
+                remove_file(None, new)?;
+            }
+        }
+        Err(axfs_vfs::VfsError::NotFound) => {}
+        Err(e) => return Err(e.into()),
     }
     parent_node_of(None, old).rename(old, new)
 }
