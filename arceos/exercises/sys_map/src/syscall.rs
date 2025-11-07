@@ -1,5 +1,8 @@
 #![allow(dead_code)]
 
+extern crate alloc;
+use alloc::vec::Vec;
+
 use core::ffi::{c_void, c_char, c_int};
 use axhal::arch::TrapFrame;
 use axhal::trap::{register_trap_handler, SYSCALL};
@@ -8,6 +11,7 @@ use axtask::current;
 use axtask::TaskExtRef;
 use axhal::paging::MappingFlags;
 use arceos_posix_api as api;
+use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange};
 
 const SYS_IOCTL: usize = 29;
 const SYS_OPENAT: usize = 56;
@@ -140,7 +144,49 @@ fn sys_mmap(
     fd: i32,
     _offset: isize,
 ) -> isize {
-    unimplemented!("no sys_mmap!");
+    let mut map_flags = MmapProt::from_bits_truncate(prot).into();
+    map_flags |= MappingFlags::USER;
+    let flag_bits = MmapFlags::from_bits_truncate(flags);
+    let size = (length + 4096 - 1) & !(4096 - 1);
+    let fixed = flag_bits.contains(MmapFlags::MAP_FIXED);
+    let populate = !flag_bits.contains(MmapFlags::MAP_NORESERVE);
+    let current_task = axtask::current();
+    let aspace_ref = &current_task.task_ext().aspace;
+    let mut aspace = aspace_ref.lock();
+
+    let start_va = if fixed {
+        let va = VirtAddr::from(addr as usize).align_down_4k();
+        if !aspace.contains_range(va, size) {
+            return -LinuxError::EINVAL.code() as isize;
+        }
+        va
+    } else {
+        let hint = VirtAddr::from(addr as usize).align_down_4k();
+        let limit = VirtAddrRange::from_start_size(aspace.base(), aspace.size());
+        match aspace.find_free_area(hint, size, limit) {
+            Some(va) => va,
+            None => return -LinuxError::ENOMEM.code() as isize,
+        }
+    };
+    match aspace.map_alloc(start_va, size, map_flags, populate) {
+        Ok(_) => {
+            let mut buf: Vec<u8> = Vec::with_capacity(size);
+            buf.resize(size, 0u8);
+            let read_ret = sys_read(fd, buf.as_mut_ptr() as *mut c_void, size);
+            if read_ret < 0 {
+                return read_ret;
+            }
+            let len = read_ret as usize;
+            if let Err(_) = aspace.write(start_va, &buf[..len]) {
+                return -LinuxError::EFAULT.code() as isize;
+            }
+
+            start_va.as_usize() as isize
+        }
+        Err(_) => {
+            -LinuxError::ENOMEM.code() as isize
+        }
+    }
 }
 
 fn sys_openat(dfd: c_int, fname: *const c_char, flags: c_int, mode: api::ctypes::mode_t) -> isize {
